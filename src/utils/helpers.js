@@ -1,3 +1,9 @@
+function generateUserId() {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return `USR-${timestamp}-${random}`;
+}
+
 function generateCandidateId() {
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -14,4 +20,4 @@ function isValidPhone(phone) {
     return regex.test(phone.replace(/[-\s]/g, ''));
 }
 
-module.exports = { generateCandidateId, isValidEmail, isValidPhone };
+module.exports = { generateUserId, generateCandidateId, isValidEmail, isValidPhone };
