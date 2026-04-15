@@ -1,12 +1,13 @@
 const fs = require('fs');
 const path = require('path');
+const { uploadCVToGoogleDrive } = require('../services/googleDriveService');
 const { saveCandidate } = require('../services/dbService');
 const { sendToWebhook } = require('../services/webhookService');
 const { isValidEmail, isValidPhone } = require('../utils/helpers');
 
 async function createCandidate(req, res) {
     console.log('Controller DIPANGGIL!');
-    console.log(' File:', req.file);
+    console.log('File:', req.file);
     console.log('Body:', req.body);
     
     try {
@@ -27,23 +28,24 @@ async function createCandidate(req, res) {
             return res.status(400).json({ success: false, errors });
         }
         
-        const uploadDir = path.join(__dirname, '../../uploads');
-        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        // === UPLOAD KE GOOGLE DRIVE ===
+        console.log(' Memanggil uploadCVToGoogleDrive...');
+        const uploadResult = await uploadCVToGoogleDrive(file, nama);
+        console.log('Hasil upload:', uploadResult);
         
-        const fileName = `${Date.now()}_${file.originalname}`;
-        const filePath = path.join(uploadDir, fileName);
-        fs.writeFileSync(filePath, file.buffer);
-        
+        // === SIMPAN KE DATABASE ===
         const candidate = await saveCandidate({
             nama, email, telepon, portofolio: portofolio || null, posisi, job_id,
+            cv_google_drive_id: uploadResult.fileId,
             cv_original_name: file.originalname,
-            cv_url: `/uploads/${fileName}`
+            cv_url: uploadResult.url
         });
         
+        // === KIRIM KE WEBHOOK ===
         sendToWebhook({
             candidate_id: candidate.candidate_id,
             job_id: candidate.job_id,
-            cv_path: candidate.cv_url,
+            cv_path: uploadResult.url,
             division: candidate.posisi
         });
         
@@ -54,7 +56,7 @@ async function createCandidate(req, res) {
         });
         
     } catch (error) {
-        console.error(error);
+        console.error(' Error:', error);
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 }
