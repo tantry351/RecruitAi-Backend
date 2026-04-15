@@ -146,3 +146,90 @@ function isValidEmail(email) {
 }
 
 module.exports = { register, login, getMe };
+
+// FORGOT PASSWORD
+async function forgotPassword(req, res) {
+    try {
+        const { email } = req.body;
+        
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Email wajib diisi' });
+        }
+        
+        const [users] = await db.execute('SELECT id, email FROM users WHERE email = ?', [email]);
+        if (users.length === 0) {
+            return res.status(404).json({ success: false, message: 'Email tidak terdaftar' });
+        }
+        
+        // Generate token random
+        const crypto = require('crypto');
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 jam
+        
+        // Simpan token ke database
+        await db.execute(
+            'INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)',
+            [email, token, expiresAt]
+        );
+        
+        // Kirim email (opsional, bisa di-skip dulu)
+        const { sendResetPasswordEmail } = require('../../services/emailService');
+        await sendResetPasswordEmail(email, token);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Link reset password telah dikirim ke email Anda'
+        });
+        
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
+// RESET PASSWORD
+async function resetPassword(req, res) {
+    try {
+        const { token, new_password } = req.body;
+        
+        if (!token || !new_password) {
+            return res.status(400).json({ success: false, message: 'Token dan password baru wajib diisi' });
+        }
+        
+        if (new_password.length < 8) {
+            return res.status(400).json({ success: false, message: 'Password minimal 8 karakter' });
+        }
+        
+        // Cek token
+        const [resets] = await db.execute(
+            'SELECT * FROM password_resets WHERE token = ? AND used = FALSE AND expires_at > NOW()',
+            [token]
+        );
+        
+        if (resets.length === 0) {
+            return res.status(400).json({ success: false, message: 'Token tidak valid atau sudah kadaluarsa' });
+        }
+        
+        const reset = resets[0];
+        
+        // Hash password baru
+        const hashedPassword = await bcrypt.hash(new_password, 10);
+        
+        // Update password user
+        await db.execute('UPDATE users SET password = ? WHERE email = ?', [hashedPassword, reset.email]);
+        
+        // Tandai token sudah digunakan
+        await db.execute('UPDATE password_resets SET used = TRUE WHERE id = ?', [reset.id]);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Password berhasil direset. Silakan login dengan password baru.'
+        });
+        
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
+module.exports = { register, login, getMe, forgotPassword, resetPassword };

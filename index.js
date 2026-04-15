@@ -1,4 +1,5 @@
 const authRoutes = require('./src/routes/authRoutes');
+const jobRoutes = require('./src/routes/jobRoutes');
 const express = require('express');
 const path = require('path');
 const dotenv = require('dotenv');
@@ -12,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use('/api/auth', authRoutes);
+app.use('/api/jobs', jobRoutes);
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api', candidateRoutes);
